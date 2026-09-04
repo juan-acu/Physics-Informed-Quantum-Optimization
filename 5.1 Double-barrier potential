@@ -1,0 +1,5 @@
+def run_double_barrier_analytic_sweep(E_values: np.ndarray, V0: float, 
+a: float, gap: float, x_start: float = 0.0):
+    T = np.array([analytic_transmission_double_barrier(E, V0, a, gap, 
+    x_start=x_start) for E in E_values])
+    return T
