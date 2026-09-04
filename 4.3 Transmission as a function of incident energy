@@ -1,0 +1,41 @@
+def run_energy_sweep(
+    E_values: np.ndarray,
+    V0: float,
+    a: float,
+    x0: float = -50.0,
+    sigma_x: float = 5.0,
+    dx_target: float = 0.25,
+    margin_factor: float = 3.0,
+    hbar: float = 1.0,
+    m: float = 1.0,
+) -> dict[str, np.ndarray]:
+    L, N = suggest_domain_and_grid(x0, sigma_x, margin_factor=margin_factor, dx_target=dx_target)
+    x, dx = build_grid(L, N)
+    V = potential_single_barrier(x, V0=V0, a=a, x_start=0.0)
+    H = build_hamiltonian(x, dx, V, hbar=hbar, m=m)
+    propagator = build_propagator(H)
+
+    T_num, R_num, T_an, T_conv, t_finals = [], [], [], [], []
+
+    for E in E_values:
+        k0 = k0_from_energy(E, hbar=hbar, m=m)
+        psi0 = gaussian_wave_packet(x, dx, x0=x0, sigma_x=sigma_x, k0=k0)
+        t_final = suggest_t_final(E, x0, sigma_x, a, margin_factor=margin_factor, m=m, hbar=hbar)
+
+        result = evolve_spectral(H, psi0, np.array([0.0, t_final]), hbar=hbar, propagator=propagator)
+        Tn, Rn = transmission_reflection(x, dx, result.states[-1], x_boundary_R=0.0, x_boundary_T=a)
+
+        T_num.append(Tn)
+        R_num.append(Rn)
+        T_an.append(analytic_transmission_square_barrier(E, V0, a, hbar=hbar, m=m))
+        T_conv.append(analytic_transmission_convolved(k0, sigma_x, V0, a, m=m, hbar=hbar))
+        t_finals.append(t_final)
+
+    return {
+        "E": np.array(E_values),
+        "T_numeric": np.array(T_num),
+        "R_numeric": np.array(R_num),
+        "T_analytic": np.array(T_an),
+        "T_convolved": np.array(T_conv),
+        "t_final": np.array(t_finals),
+    }
