@@ -1,0 +1,27 @@
+def analytic_transmission_square_barrier(E: float, V0: float, a: float, hbar: float = 1.0, m: float = 1.0) -> float:
+    if np.isclose(E, V0):
+        k1 = np.sqrt(2 * m * E) / hbar
+        T = 1.0 / (1.0 + (k1 * a) ** 2 / 4.0)
+        return T
+    if E < V0:
+        kappa = np.sqrt(2 * m * (V0 - E)) / hbar
+        denom = 1.0 + (V0**2 * np.sinh(kappa * a) ** 2) / (4.0 * E * (V0 - E))
+        return 1.0 / denom
+    else:
+        k2 = np.sqrt(2 * m * (E - V0)) / hbar
+        denom = 1.0 + (V0**2 * np.sin(k2 * a) ** 2) / (4.0 * E * (E - V0))
+        return 1.0 / denom
+
+
+def analytic_transmission_convolved(
+    k0: float, sigma_x: float, V0: float, a: float, m: float = 1.0, hbar: float = 1.0,
+    n_sigma: float = 6.0, n_k: int = 801,
+) -> float:
+    sigma_k = 1.0 / (2.0 * sigma_x)
+    k_vals = np.linspace(k0 - n_sigma * sigma_k, k0 + n_sigma * sigma_k, n_k)
+    k_vals = k_vals[k_vals > 0]
+    weights = np.exp(-(k_vals - k0) ** 2 / (2 * sigma_k**2))
+    weights /= np.trapezoid(weights, k_vals)
+    E_vals = (hbar**2 * k_vals**2) / (2 * m)
+    T_vals = np.array([analytic_transmission_square_barrier(E, V0, a, hbar, m) for E in E_vals])
+    return np.trapezoid(T_vals * weights, k_vals)
