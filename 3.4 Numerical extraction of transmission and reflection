@@ -1,0 +1,18 @@
+def transmission_reflection(x: np.ndarray, dx: float, psi_final: Qobj, x_boundary_R: float, x_boundary_T: float):
+    prob_density = np.abs(psi_final.full().flatten()) ** 2
+    mask_R = x < x_boundary_R
+    mask_T = x > x_boundary_T
+    R = np.sum(prob_density[mask_R]) * dx
+    T = np.sum(prob_density[mask_T]) * dx
+    return T, R
+
+
+def transmission_reflection_extended(x: np.ndarray, dx: float, psi_final: Qobj, x_boundary_R: float, x_boundary_T: float):
+    prob_density = np.abs(psi_final.full().flatten()) ** 2
+    mask_R = x < x_boundary_R
+    mask_T = x > x_boundary_T
+    mask_barrier = (x >= x_boundary_R) & (x <= x_boundary_T)
+    R = np.sum(prob_density[mask_R]) * dx
+    T = np.sum(prob_density[mask_T]) * dx
+    P_barrier = np.sum(prob_density[mask_barrier]) * dx
+    return T, R, P_barrier
