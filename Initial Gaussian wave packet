@@ -1,0 +1,9 @@
+def gaussian_wave_packet(x: np.ndarray, dx: float, x0: float, sigma_x: float, k0: float) -> Qobj:
+    psi = np.exp(-((x - x0) ** 2) / (4.0 * sigma_x**2)) * np.exp(1j * k0 * x)
+    norm = np.sqrt(np.sum(np.abs(psi) ** 2) * dx)
+    psi = psi / norm
+    return Qobj(psi.reshape(-1, 1))
+
+
+def k0_from_energy(E: float, hbar: float = 1.0, m: float = 1.0) -> float:
+    return np.sqrt(2.0 * m * E) / hbar
