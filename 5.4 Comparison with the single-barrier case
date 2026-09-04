@@ -1,0 +1,48 @@
+def compare_single_vs_double(E_values: np.ndarray, V0: float, a: float, 
+gap: float):
+    a_fused = 2 * a + gap
+    T_simple = np.array([
+    analytic_transmission_square_barrier(E, V0, a) 
+    for E in E_values
+    ])
+    T_solida = np.array([
+    analytic_transmission_square_barrier(E, V0, a_fused) 
+    for E in E_values
+    ])
+    T_doble = run_double_barrier_analytic_sweep(E_values, V0, a, gap)
+    return {
+        "E": E_values,
+        "T_simple": T_simple,
+        "T_solida": T_solida,
+        "T_doble": T_doble,
+        "a_fused": a_fused,
+    }
+ 
+ 
+def plot_comparison(comparison: dict, V0: float, a: float, gap: float, peaks, 
+outfile: str = "seccion5_4_comparacion.png"):
+    E = comparison["E"]
+    fig, ax = plt.subplots(figsize=(8, 5))
+ 
+    ax.semilogy(E, comparison["T_doble"], "-", color="tab:blue", 
+    linewidth=1.5, label=rf"Doble barrera resonante ($a={a}$, gap$={gap}$)")
+    ax.semilogy(E, comparison["T_simple"], "--", color="tab:green", 
+    label=rf"Barrera simple (ancho $a={a}$)")
+    ax.semilogy(E, comparison["T_solida"], ":", color="tab:red", linewidth=2, 
+    label=rf"Barrera sólida equivalente (ancho ${comparison['a_fused']}$)")
+ 
+    for E_peak, T_peak, _fwhm in peaks:
+        ax.plot(E_peak, T_peak, "*", color="darkorange", markersize=12, 
+        zorder=5)
+ 
+    ax.axvline(V0, color="gray", alpha=0.4, linestyle=":", label=r"$E=V_0$")
+    ax.set_xlabel("Energía incidente E")
+    ax.set_ylabel("Coeficiente de transmisión T (escala log)")
+    ax.set_title(rf"Sección 5.4 — Doble barrera resonante vs. barrera "
+    rf"simple/sólida ($V_0={V0}$)")
+    ax.legend(loc="lower right", fontsize=8)
+    ax.grid(alpha=0.3, which="both")
+ 
+    fig.tight_layout()
+    fig.savefig(outfile, dpi=150)
+    print(f"Figura guardada en: {outfile}")
