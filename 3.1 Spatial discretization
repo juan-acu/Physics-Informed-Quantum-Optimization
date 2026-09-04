@@ -1,0 +1,4 @@
+def build_grid(L: float, N: int) -> tuple[np.ndarray, float]:
+    x = np.linspace(-L / 2, L / 2, N)
+    dx = x[1] - x[0]
+    return x, dx\end{lstlisting}
