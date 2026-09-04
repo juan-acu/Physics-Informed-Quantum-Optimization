@@ -1,0 +1,30 @@
+def sweep_over_V0(E_values: np.ndarray, V0_list, a_fixed: float, 
+x0: float = -50.0, sigma_x: float = 5.0, verbose: bool = False):
+    results = {}
+    for V0 in V0_list:
+        print(f"--- Barrido T(E) para V0={V0} (a={a_fixed}) ---")
+        results[V0] = run_energy_sweep(E_values, V0=V0, a=a_fixed, x0=x0, 
+        sigma_x=sigma_x, verbose=verbose)
+    return results
+ 
+ 
+def plot_effect_of_V0(sweeps_by_V0: dict, a_fixed: float, 
+outfile: str = "seccion4_4_efecto_V0.png"):
+    fig, ax = plt.subplots(figsize=(8, 5))
+    colors = plt.cm.viridis(np.linspace(0.15, 0.85, len(sweeps_by_V0)))
+ 
+    for color, (V0, sweep) in zip(colors, sorted(sweeps_by_V0.items())):
+        ax.plot(sweep["E"], sweep["T_numerico"], "o-", color=color, 
+        markersize=4, label=rf"$V_0={V0}$")
+        ax.axvline(V0, color=color, alpha=0.3, linestyle=":")
+ 
+    ax.set_xlabel("Energía incidente E")
+    ax.set_ylabel("Coeficiente de transmisión T (numérico)")
+    ax.set_title(rf"Sección 4.4 — Efecto de la altura de la barrera "
+    rf"($a={a_fixed}$ fijo)")
+    ax.legend(loc="lower right", fontsize=9)
+    ax.grid(alpha=0.3)
+ 
+    fig.tight_layout()
+    fig.savefig(outfile, dpi=150)
+    print(f"Figura guardada en: {outfile}")
