@@ -1,0 +1,86 @@
+def sweep_over_gap(E_values: np.ndarray, V0: float, a: float, gap_list, 
+x_start: float = 0.0, T_min: float = 0.15):
+    results = {}
+    for gap in gap_list:
+        T = run_double_barrier_analytic_sweep(E_values, V0, a, gap, 
+        x_start=x_start)
+        peaks = find_and_refine_resonance_peaks(E_values, T, V0, a, gap, 
+        x_start=x_start, T_min=T_min)
+        results[gap] = {"E": E_values, "T": T, "peaks": peaks}
+        resumen = ", ".join(
+    f"E={Ep:.4f}(T={Tp:.3f}, FWHM={fw:.5f})" if fw else
+    f"E={Ep:.4f}(T={Tp:.3f})"
+    for Ep, Tp, fw in peaks
+)
+        print(f"gap={gap}: {len(peaks)} resonancia(s) -> {resumen}")
+    return results
+ 
+ 
+def plot_family_over_gap(sweeps_by_gap: dict, V0: float, a: float, 
+outfile="seccion5_2_efecto_gap.png"):
+    fig, ax = plt.subplots(figsize=(8, 5))
+    colors = plt.cm.cool(np.linspace(0.15, 0.85, len(sweeps_by_gap)))
+ 
+    for color, (gap, data) in zip(colors, sorted(sweeps_by_gap.items())):
+        ax.plot(data["E"], data["T"], "-", color=color, 
+        label=rf"gap$={gap}$ ({len(data['peaks'])} pico(s))")
+        for E_peak, T_peak, _fwhm in data["peaks"]:
+            ax.plot(E_peak, T_peak, "*", color=color, markersize=10, zorder=5)
+ 
+    ax.axvline(V0, color="red", alpha=0.3, linestyle=":", label=r"$E=V_0$")
+    ax.set_xlabel("Energía incidente E")
+    ax.set_ylabel("Coeficiente de transmisión T")
+    ax.set_title(rf"Sección 5.2 — Efecto del ancho del pozo "
+    rf"($V_0={V0}$, $a={a}$ fijos)")
+    ax.legend(loc="center right", fontsize=8)
+    ax.grid(alpha=0.3)
+ 
+    fig.tight_layout()
+    fig.savefig(outfile, dpi=150)
+    print(f"Figura guardada en: {outfile}")
+
+
+def demo_resonance_narrowing_convergence(V0: float, a: float, gap: float, 
+E_peak: float, E_off: float, sigma_x_list, x0_base: float = -50.0, 
+dx_target: float = 0.25, margin_factor: float = 3.0, verbose: bool = True):
+    extra = 2 * a + gap
+    T_analitico_pico = analytic_transmission_double_barrier(E_peak, V0, a, 
+    gap)
+ 
+    if verbose:
+        print(f"T analítico en resonancia (E={E_peak:.4f}): "
+        f"{T_analitico_pico:.4f}")
+        print(f"{'sigma_x':>8} {'N':>6} {'t_final':>9} "
+        f"{'T_num(off-res)':>16} {'T_num(en resonancia)':>22}")
+ 
+    rows = []
+    for sigma_x in sigma_x_list:
+        x0 = -(2.5 * sigma_x + 30.0)
+        margin = margin_factor * sigma_x
+        L = 2.0 * (abs(x0) + margin) + 4.0 * sigma_x + extra
+        N = int(L / dx_target)
+        N += N % 2
+ 
+        x, dx = build_grid(L, N)
+        V = potential_double_barrier(x, V0=V0, a=a, gap=gap, x_start=0.0)
+        H = build_hamiltonian(x, dx, V)
+        propagator = build_propagator(H)
+ 
+        x_boundary_T = 2 * a + gap
+        T_values = {}
+        for E, label in [(E_off, "off"), (E_peak, "res")]:
+            k0 = k0_from_energy(E)
+            psi0 = gaussian_wave_packet(x, dx, x0=x0, sigma_x=sigma_x, k0=k0)
+            vg = k0
+            t_final = (abs(x0) + margin + extra) / vg
+            result = evolve_spectral(H, psi0, np.array([0.0, t_final]), 
+            propagator=propagator)
+            prob = np.abs(result.states[-1].full().flatten()) ** 2
+            T_values[label] = np.sum(prob[x > x_boundary_T]) * dx
+ 
+        rows.append((sigma_x, N, t_final, T_values["off"], T_values["res"]))
+        if verbose:
+            print(f"{sigma_x:8.0f} {N:6d} {t_final:9.1f} "
+            f"{T_values['off']:16.4f} {T_values['res']:22.4f}")
+ 
+    return rows
