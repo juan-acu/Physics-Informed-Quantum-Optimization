@@ -1,0 +1,13 @@
+def suggest_domain_and_grid(x0: float, sigma_x: float, margin_factor: float = 3.0, dx_target: float = 0.25):
+    margin = margin_factor * sigma_x
+    L = 2.0 * (abs(x0) + margin) + 4.0 * sigma_x
+    N = int(L / dx_target)
+    N += N % 2
+    return L, N
+
+
+def suggest_t_final(E: float, x0: float, sigma_x: float, a: float, margin_factor: float = 3.0, m: float = 1.0, hbar: float = 1.0):
+    k0 = k0_from_energy(E, hbar=hbar, m=m)
+    vg = hbar * k0 / m
+    margin = margin_factor * sigma_x + a
+    return (abs(x0) + margin) / vg
