@@ -1,0 +1,39 @@
+def check_normalization(psi: Qobj, dx: float, tol: float = 1e-3) -> float:
+    norm = np.sum(np.abs(psi.full().flatten()) ** 2) * dx
+    return norm
+
+
+def transfer_matrix_transmission(E: float, regions: list[tuple[float, float]], hbar: float = 1.0, m: float = 1.0) -> float:
+    Vs = np.array([r[0] for r in regions], dtype=complex)
+    xs = np.array([r[1] for r in regions], dtype=float)
+    k = np.sqrt(2 * m * (E - Vs) + 0j) / hbar
+
+    M = np.eye(2, dtype=complex)
+    for n in range(len(regions) - 1):
+        k1, k2 = k[n], k[n + 1]
+        xn = xs[n + 1]
+        pref = 1.0 / (2 * k2)
+        boundary = pref * np.array([
+            [(k2 + k1) * np.exp(1j * (k1 - k2) * xn), (k2 - k1) * np.exp(-1j * (k1 + k2) * xn)],
+            [(k2 - k1) * np.exp(1j * (k1 + k2) * xn), (k2 + k1) * np.exp(-1j * (k1 - k2) * xn)],
+        ])
+        M = boundary @ M
+
+    k_first, k_last = k[0], k[-1]
+    T = (k_last.real / k_first.real) * abs(1.0 / M[0, 0]) ** 2
+    return T
+
+
+def double_barrier_regions(V0: float, a: float, gap: float, x_start: float = 0.0) -> list[tuple[float, float]]:
+    return [
+        (0.0, -np.inf),
+        (V0, x_start),
+        (0.0, x_start + a),
+        (V0, x_start + a + gap),
+        (0.0, x_start + 2 * a + gap),
+    ]
+
+
+def analytic_transmission_double_barrier(E: float, V0: float, a: float, gap: float, x_start: float = 0.0, hbar: float = 1.0, m: float = 1.0) -> float:
+    regions = double_barrier_regions(V0, a, gap, x_start=x_start)
+    return transfer_matrix_transmission(E, regions, hbar=hbar, m=m)
