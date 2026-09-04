@@ -1,0 +1,78 @@
+def find_resonance_peaks(E_values: np.ndarray, T_values: np.ndarray, 
+T_min: float = 0.3):
+    peaks = []
+    for i in range(1, len(T_values) - 1):
+        if (T_values[i] > T_values[i - 1] and T_values[i] > T_values[i + 1] 
+        and T_values[i] > T_min):
+            peaks.append((E_values[i], T_values[i]))
+    return peaks
+ 
+ 
+def measure_resonance_width(V0: float, a: float, gap: float, E_peak: float, 
+x_start: float = 0.0, window: float = 0.05, n: int = 4000):
+    E_local = np.linspace(max(1e-4, E_peak - window), E_peak + window, n)
+    T_local = run_double_barrier_analytic_sweep(E_local, V0, a, gap, 
+    x_start=x_start)
+    idx_max = np.argmax(T_local)
+    T_max = T_local[idx_max]
+    above_half = E_local[T_local > T_max / 2]
+    if len(above_half) < 2:
+        return None
+    return above_half.max() - above_half.min()
+ 
+ 
+def refine_peak(V0: float, a: float, gap: float, E_approx: float, 
+x_start: float = 0.0, window: float = 0.02, n: int = 3000):
+    E_local = np.linspace(max(1e-6, E_approx - window), E_approx + window, n)
+    T_local = run_double_barrier_analytic_sweep(E_local, V0, a, gap, 
+    x_start=x_start)
+    idx_max = np.argmax(T_local)
+    E_refined, T_refined = E_local[idx_max], T_local[idx_max]
+    above_half = E_local[T_local > T_refined / 2]
+    fwhm = (above_half.max() - above_half.min()) if len(above_half) >= 2 \
+    else None
+    return E_refined, T_refined, fwhm
+ 
+ 
+def find_and_refine_resonance_peaks(E_values: np.ndarray, 
+T_values: np.ndarray, V0: float, a: float, gap: float, x_start: float = 0.0, 
+T_min: float = 0.15, refine_window: float = 0.02):
+    coarse_peaks = find_resonance_peaks(E_values, T_values, T_min=T_min)
+    refined = []
+    seen_E = []
+    for E_approx, _ in coarse_peaks:
+        E_r, T_r, fwhm = refine_peak(V0, a, gap, E_approx, x_start=x_start, 
+        window=refine_window)
+        if any(abs(E_r - e) < 1e-3 for e in seen_E):
+            continue  
+          # evitar duplicados si dos puntos gruesos refinan al mismo pico
+        seen_E.append(E_r)
+        refined.append((E_r, T_r, fwhm))
+    return sorted(refined, key=lambda t: t[0])
+ 
+ 
+def plot_T_vs_E_double_barrier(E_values, T_values, peaks, V0, a, gap, 
+outfile="seccion5_T_de_E_doble_barrera.png"):
+    fig, ax = plt.subplots(figsize=(8, 5))
+    ax.plot(E_values, T_values, "-", color="tab:blue", 
+    label=r"$T(E)$ (matriz de transferencia)")
+    ax.axvline(V0, color="red", alpha=0.4, linestyle=":", label=r"$E=V_0$")
+ 
+    for E_peak, T_peak, fwhm in peaks:
+        ax.plot(E_peak, T_peak, "*", color="darkorange", markersize=12, 
+        zorder=5)
+        label = (f"E={E_peak:.3f}\nFWHM={fwhm:.4f}" if fwhm 
+         else f"E={E_peak:.3f}")
+        ax.annotate(label, (E_peak, T_peak), textcoords="offset points", 
+        xytext=(6, -18), fontsize=7)
+ 
+    ax.set_xlabel("Energía incidente E")
+    ax.set_ylabel("Coeficiente de transmisión T")
+    ax.set_title(rf"Sección 5.1/5.3 — Doble barrera: $V_0={V0}$, $a={a}$, "
+    rf"gap={gap}")
+    ax.legend(loc="center right", fontsize=9)
+    ax.grid(alpha=0.3)
+ 
+    fig.tight_layout()
+    fig.savefig(outfile, dpi=150)
+    print(f"Figura guardada en: {outfile}")
