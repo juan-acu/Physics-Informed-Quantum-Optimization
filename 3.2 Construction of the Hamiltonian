@@ -1,0 +1,25 @@
+def kinetic_operator(N: int, dx: float, hbar: float = 1.0, m: float = 1.0) -> np.ndarray:
+    main = np.full(N, 2.0)
+    off = np.full(N - 1, -1.0)
+    T = np.diag(main) + np.diag(off, 1) + np.diag(off, -1)
+    T *= hbar**2 / (2.0 * m * dx**2)
+    return T
+
+def potential_single_barrier(x: np.ndarray, V0: float, a: float, x_start: float = 0.0) -> np.ndarray:
+    return np.where((x >= x_start) & (x <= x_start + a), V0, 0.0)
+
+
+def potential_double_barrier(
+    x: np.ndarray, V0: float, a: float, gap: float, x_start: float = 0.0
+) -> np.ndarray:
+    b1 = (x >= x_start) & (x <= x_start + a)
+    b2 = (x >= x_start + a + gap) & (x <= x_start + 2 * a + gap)
+    return np.where(b1 | b2, V0, 0.0)
+
+
+def build_hamiltonian(x: np.ndarray, dx: float, V: np.ndarray, hbar: float = 1.0, m: float = 1.0) -> Qobj:
+    N = len(x)
+    T = kinetic_operator(N, dx, hbar=hbar, m=m)
+    H = T + np.diag(V)
+    assert np.allclose(H, H.T), "H must be Hermitian (real symmetric here)."
+    return Qobj(H)
