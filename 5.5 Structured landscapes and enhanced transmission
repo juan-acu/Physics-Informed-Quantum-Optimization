@@ -1,0 +1,26 @@
+def build_structured_landscape_summary(V0: float, a: float, gap: float, 
+peaks):
+    a_fused = 2 * a + gap
+    rows = []
+    for E_peak, T_peak, fwhm in peaks:
+        T_solida = analytic_transmission_square_barrier(E_peak, V0, a_fused)
+        mejora = T_peak / T_solida if T_solida > 0 else float("inf")
+        rows.append({
+            "E_resonancia": E_peak,
+            "T_doble": T_peak,
+            "FWHM": fwhm,
+            "T_solida_equivalente": T_solida,
+            "factor_mejora": mejora,
+        })
+    return rows
+ 
+ 
+def print_structured_landscape_summary(rows):
+    print("\n--- Tabla resumen (5.5) — puente hacia la Sección 6 ---")
+    print(f"{'E_resonancia':>14} {'T_doble':>10} {'FWHM':>10} "
+    f"{'T_solida_eq':>14} {'factor_mejora':>16}")
+    for r in rows:
+        fwhm_str = f"{r['FWHM']:.5f}" if r["FWHM"] else "N/A"
+        print(f"{r['E_resonancia']:14.4f} {r['T_doble']:10.4f} "
+        f"{fwhm_str:>10} {r['T_solida_equivalente']:14.2e} "
+        f"{r['factor_mejora']:16.2e}")
