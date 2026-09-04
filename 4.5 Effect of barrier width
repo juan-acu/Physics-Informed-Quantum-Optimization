@@ -1,0 +1,44 @@
+def sweep_over_a(E_values: np.ndarray, V0_fixed: float, a_list, 
+x0: float = -50.0, sigma_x: float = 5.0, verbose: bool = False):
+    results = {}
+    for a in a_list:
+        print(f"--- Barrido T(E) para a={a} (V0={V0_fixed}) ---")
+        results[a] = run_energy_sweep(E_values, V0=V0_fixed, a=a, x0=x0, 
+        sigma_x=sigma_x, verbose=verbose)
+    return results
+ 
+ 
+def plot_effect_of_a(sweeps_by_a: dict, V0_fixed: float, 
+outfile: str = "seccion4_5_efecto_a.png"):
+    fig, ax = plt.subplots(figsize=(8, 5))
+    colors = plt.cm.plasma(np.linspace(0.15, 0.85, len(sweeps_by_a)))
+ 
+    for color, (a, sweep) in zip(colors, sorted(sweeps_by_a.items())):
+        ax.plot(sweep["E"], sweep["T_numerico"], "o-", color=color, 
+        markersize=4, label=rf"$a={a}$")
+ 
+    ax.axvline(V0_fixed, color="red", alpha=0.4, linestyle=":", 
+    label=r"$E=V_0$")
+    ax.set_xlabel("Energía incidente E")
+    ax.set_ylabel("Coeficiente de transmisión T (numérico)")
+    ax.set_title(rf"Sección 4.5 — Efecto del ancho de la barrera " 
+    rf"($V_0={V0_fixed}$ fijo)")
+    ax.legend(loc="lower right", fontsize=9)
+    ax.grid(alpha=0.3)
+ 
+    fig.tight_layout()
+    fig.savefig(outfile, dpi=150)
+    print(f"Figura guardada en: {outfile}")
+ 
+ 
+def report_barrier_retention(sweeps_by_a: dict):
+    for a, sweep in sorted(sweeps_by_a.items()):
+        E = sweep["E"]
+        mask_umbral = (E > 0.8) & (E < 1.3)  # V0 fijo = 1.0 en el demo
+        if not np.any(mask_umbral):
+            continue
+        residuo1 = 1.0 
+        residuo2 = sweep["T_numerico"][mask_umbral]
+        residuo3 = sweep["R_numerico"][mask_umbral]
+        residuo = residuo1 - (residuo2 + residuo3)
+        print(f"a={a}:residuo promedio cerca del umbral={residuo.mean():.4f}")
