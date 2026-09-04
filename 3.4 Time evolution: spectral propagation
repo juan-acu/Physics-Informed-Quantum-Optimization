@@ -1,0 +1,32 @@
+class SpectralResult:
+    def __init__(self, states: list[Qobj]):
+        self.states = states
+
+
+def build_propagator(H: Qobj):
+    H_mat = np.asarray(H.full())
+    if np.allclose(H_mat.imag, 0.0, atol=1e-10):
+        H_mat = H_mat.real
+    eigvals, eigvecs = np.linalg.eigh(H_mat)
+    return eigvals, eigvecs
+
+
+def evolve_spectral(H: Qobj, psi0: Qobj, tlist: np.ndarray, hbar: float = 1.0, propagator=None) -> SpectralResult:
+    eigvals, eigvecs = build_propagator(H) if propagator is None else propagator
+    if hbar != 1.0:
+        eigvals = eigvals / hbar
+
+    psi0_vec = psi0.full().flatten()
+    c = eigvecs.T @ psi0_vec
+
+    states = []
+    for t in tlist:
+        phase = np.exp(-1j * eigvals * t)
+        psi_t = eigvecs @ (c * phase)
+        states.append(Qobj(psi_t.reshape(-1, 1)))
+
+    return SpectralResult(states)
+
+
+def evolve(H: Qobj, psi0: Qobj, tlist: np.ndarray, hbar: float = 1.0, propagator=None) -> SpectralResult:
+    return evolve_spectral(H, psi0, tlist, hbar=hbar, propagator=propagator)
