@@ -37,3 +37,125 @@ def double_barrier_regions(V0: float, a: float, gap: float, x_start: float = 0.0
 def analytic_transmission_double_barrier(E: float, V0: float, a: float, gap: float, x_start: float = 0.0, hbar: float = 1.0, m: float = 1.0) -> float:
     regions = double_barrier_regions(V0, a, gap, x_start=x_start)
     return transfer_matrix_transmission(E, regions, hbar=hbar, m=m)
+
+
+def suggest_domain_and_grid(x0: float, sigma_x: float, margin_factor: float = 3.0, dx_target: float = 0.25):
+    margin = margin_factor * sigma_x
+    L = 2.0 * (abs(x0) + margin) + 4.0 * sigma_x
+    N = int(L / dx_target)
+    N += N % 2
+    return L, N
+ 
+ 
+def suggest_t_final(E: float, x0: float, sigma_x: float, a: float, margin_factor: float = 3.0, m: float = 1.0, hbar: float = 1.0) -> float:
+    k0 = k0_from_energy(E, hbar=hbar, m=m)
+    vg = hbar * k0 / m
+    return (abs(x0) + margin_factor * sigma_x + a) / vg
+
+
+def time_resolved_TRPb(x, dx, psi0, H, tlist: np.ndarray, x_boundary_R: float, x_boundary_T: float, propagator=None, hbar: float = 1.0):
+    """Evaluates T(t), R(t), P_barrier(t) on a dense time grid in a single
+    vectorized spectral-propagation call (exact for every t simultaneously,
+    since H is time-independent -- see Section 3.4)."""
+    result = evolve_spectral(H, psi0, tlist, hbar=hbar, propagator=propagator)
+    T_t, R_t, Pb_t = [], [], []
+    for psi_t in result.states:
+        prob = np.abs(psi_t.full().flatten()) ** 2
+        R_t.append(np.sum(prob[x < x_boundary_R]) * dx)
+        T_t.append(np.sum(prob[x > x_boundary_T]) * dx)
+        Pb_t.append(np.sum(prob[(x >= x_boundary_R) & (x <= x_boundary_T)]) * dx)
+    return np.array(T_t), np.array(R_t), np.array(Pb_t)
+ 
+ 
+def edge_probability(x, dx, psi0, H, tlist: np.ndarray, L: float, edge_width: float = 8.0, propagator=None, hbar: float = 1.0):
+    """Probability within edge_width of either domain boundary, as a
+    function of time -- used to detect genuine boundary-reflection growth
+    (as opposed to the intrinsic Gaussian tail already present at t=0)."""
+    result = evolve_spectral(H, psi0, tlist, hbar=hbar, propagator=propagator)
+    mask = (x < -L / 2 + edge_width) | (x > L / 2 - edge_width)
+    edge_t = []
+    for psi_t in result.states:
+        prob = np.abs(psi_t.full().flatten()) ** 2
+        edge_t.append(np.sum(prob[mask]) * dx)
+    return np.array(edge_t)
+ 
+
+
+def check_convergence(E: float, V0: float, a: float, x0: float = -50.0, sigma_x: float = 5.0, L: float = None, N: int = None, t_final: float = None, extend_factor: float = 1.8, n_t: int = 300, verbose: bool = True):
+    """Runs the full time-convergence diagnostic for one case. If L, N, or
+    t_final are not provided, they are computed via suggest_domain_and_grid
+    / suggest_t_final (the "table" configuration); pass them explicitly to
+    reproduce the fixed "demo" configuration (L=200, N=800, t_final=60).
+    """
+    if L is None or N is None:
+        L, N = suggest_domain_and_grid(x0, sigma_x)
+    if t_final is None:
+        t_final = suggest_t_final(E, x0, sigma_x, a)
+ 
+    x, dx = build_grid(L, N)
+    V = potential_single_barrier(x, V0=V0, a=a, x_start=0.0)
+    H = build_hamiltonian(x, dx, V)
+    propagator = build_propagator(H)
+    k0 = k0_from_energy(E)
+    psi0 = gaussian_wave_packet(x, dx, x0=x0, sigma_x=sigma_x, k0=k0)
+ 
+    t_max = extend_factor * t_final
+    tlist = np.linspace(0.0, t_max, n_t)
+    T_t, R_t, Pb_t = time_resolved_TRPb(x, dx, psi0, H, tlist, 0.0, a, propagator=propagator)
+    edge_t = edge_probability(x, dx, psi0, H, tlist, L, propagator=propagator)
+    edge_baseline = edge_t[0]
+ 
+    idx_used = np.argmin(np.abs(tlist - t_final))
+    T_used, R_used, Pb_used = T_t[idx_used], R_t[idx_used], Pb_t[idx_used]
+ 
+    # plateau detection: backward scan from t_final
+    tol, Pb_threshold = 0.0015, 0.01
+    plateau_idx = idx_used
+    for i in range(idx_used, -1, -1):
+        if abs(T_t[i] - T_used) < tol and abs(R_t[i] - R_used) < tol and Pb_t[i] < Pb_threshold:
+            plateau_idx = i
+        else:
+            break
+    t_plateau = tlist[plateau_idx]
+ 
+    # boundary-growth onset (relative to the intrinsic t=0 tail baseline)
+    growth_threshold = 5e-4
+    excess = edge_t - edge_baseline
+    onset_mask = excess > growth_threshold
+    t_boundary_onset = tlist[np.argmax(onset_mask)] if np.any(onset_mask) else None
+ 
+    if verbose:
+        print(f"E={E}, V0={V0}, a={a}: L={L}, N={N}, dx={dx:.4f}, x0={x0}, sigma_x={sigma_x}, k0={k0:.4f}")
+        print(f"  t_final (chapter)={t_final:.2f}  T={T_used:.4f}  R={R_used:.4f}  Pb={Pb_used:.5f}")
+        print(f"  t_plateau={t_plateau:.2f}  margin={t_final-t_plateau:.2f}")
+        print(f"  boundary growth onset: {t_boundary_onset if t_boundary_onset else 'none in window'}")
+ 
+    return dict(E=E, V0=V0, a=a, L=L, N=N, dx=dx, x0=x0, sigma_x=sigma_x, k0=k0,
+                t_final=t_final, T_used=T_used, R_used=R_used, Pb_used=Pb_used,
+                t_plateau=t_plateau, t_boundary_onset=t_boundary_onset,
+                tlist=tlist, T_t=T_t, R_t=R_t, Pb_t=Pb_t)
+ 
+ 
+def plot_convergence(cases: list, outfile: str = "convergence_T_R_Pbarrier.png"):
+    """Plots T(t), R(t), P_barrier(t) for a list of check_convergence()
+    result dictionaries, one panel per case, marking t_final and the
+    1.3*t_final converged reference time."""
+    fig, axes = plt.subplots(len(cases), 1, figsize=(8, 3.2 * len(cases)))
+    if len(cases) == 1:
+        axes = [axes]
+ 
+    for ax, c in zip(axes, cases):
+        ax.plot(c["tlist"], c["T_t"], color="tab:blue", label="T(t)")
+        ax.plot(c["tlist"], c["R_t"], color="tab:green", label="R(t)")
+        ax.plot(c["tlist"], c["Pb_t"], color="tab:red", label=r"$P_{\mathrm{barrier}}(t)$")
+        ax.axvline(c["t_final"], color="gray", linestyle="--", alpha=0.7, label=r"$t_f$ (original)")
+        ax.axvline(1.3 * c["t_final"], color="purple", linestyle=":", alpha=0.7, label=r"$1.3\,t_f$ (converged)")
+        ax.set_title(f"E={c['E']}  (V0={c['V0']}, a={c['a']}, L={c['L']}, N={c['N']})")
+        ax.set_xlabel("t")
+        ax.set_ylabel("Probability")
+        ax.grid(alpha=0.3)
+ 
+    axes[0].legend(loc="center right", fontsize=8)
+    fig.tight_layout()
+    fig.savefig(outfile, dpi=150)
+    print(f"Figure saved to: {outfile}")
